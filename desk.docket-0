@@ -1,7 +1,7 @@
 :~  title+'File-Share'
     info+'A simple file sharing app.'
     color+0xff.e5b5
-    image+'https://media.urbit.org/guides/additional/dist/wut.svg'
+    image+'https://raw.githubusercontent.com/nathanlever/file-share/master/app-icon.svg'
     base+'file-share'
     version+[0 0 1]
     site+/file-share
