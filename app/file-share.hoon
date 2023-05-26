@@ -15,7 +15,7 @@
   `@t`(cat 3 year (cat 3 month (cat 3 day (cat 3 hour minute))))
 ::
 ++  get-size
-  |=  s=@
+  |=  s=@ud
   ^-  @t
   ?:  (gth s 999.999)
     =/  size  (dvr s 1.000.000)
@@ -26,6 +26,39 @@
     =/  decimal  (div q.size 100)
     `@t`(cat 3 (scot %ud p.size) (cat 3 ',' (cat 3 (scot %ud decimal) ' KB')))
   `@t`(cat 3 (scot %ud s) ' B')
+::
+++  get-sent-index
+  |=  [filename=@t date=@da =sent]
+  ^-  @ud
+  =/  compare  [filename date]
+  =/  i  0
+  |-
+    ^-  @ud
+    =/  sent-file  (snag i sent)
+    ?:  =(compare -.sent-file)
+      i
+    $(i +(i))
+::
+++  check-filename-duplicate
+  |=  [filename=@t state=app-state]
+  ^-  @t
+    =/  i  0
+    =/  filename-length  (lent (trip filename))
+    =/  filename-name  |-
+      ^-  @t
+      ?:  =((snag i (trip filename)) '.')
+        (cut 3 [0 i] filename)
+      $(i +(i))
+    =.  i  (lent (trip filename-name))
+    =/  filename-extension  (cut 3 [i filename-length] filename)
+    =.  i  0
+    |-
+      ^-  @t
+      ?.  (~(has by received.state) filename)
+        filename
+      =.  i  (add i 1)
+      =/  filename-number  (cat 3 '_' (scot %ud i))
+      $(filename (cat 3 filename-name (cat 3 filename-number filename-extension)))
 ::
 ++  http-login-redirect
   |=  [req=(pair @ta inbound-request:eyre) state=app-state]
@@ -61,6 +94,20 @@
       [%give %kick [/http-response/[p.req]]~ ~]
     ==
 ::
+++  invalid-ship-redirect
+  |=  [req=(pair @ta inbound-request:eyre) state=app-state ship=(unit @p)]
+  ^-  (quip card app-state)
+  =/  =response-header:http
+    :-  301
+    :~  ['Location' '/file-share/invalid-input']
+    ==
+  :_  state
+  :~
+    [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
+    [%give %fact [/http-response/[p.req]]~ %http-response-data !>(~)]
+    [%give %kick [/http-response/[p.req]]~ ~]
+  ==
+::
 ++  file-share-post
   |=  [req=(pair @ta inbound-request:eyre) state=app-state our=@p now=@da eny=@t]
   ^-  (quip card app-state)
@@ -75,7 +122,7 @@
   =/  end  0x2d2d.0a0d
   =/  i  0
   =/  ship  |-
-    ^-  @p
+    ^-  (unit @p)
     =/  compare  `@ux`(cut 3 [i 4] q.data)
     ?:  =(ship-start compare)
       =.  i  (add i 4)
@@ -86,9 +133,18 @@
         ?:  =(ship-end compare)
           j
         $(j +(j))
-      =/  string  `@t`(cut 3 [i (sub end i)] q.data)
-      `@p`(slav %p string)
+      =/  ship-result  (slaw %p `@t`(cut 3 [i (sub end i)] q.data))
+      ?~  ship-result
+        ~
+      [~ `@p`u.ship-result]
     $(i +(i))
+  ?~  ship
+    (invalid-ship-redirect req state ship)
+  ?.  ?|  ?=(%duke (clan:title u.ship))
+          ?=(%king (clan:title u.ship))
+          ?=(%czar (clan:title u.ship))
+      ==
+    (invalid-ship-redirect req state ship)
   =/  filename  |-
     ^-  @t
     =/  compare  `@ux`(cut 3 [i 10] q.data)
@@ -138,25 +194,36 @@
       =.  q.data  `@ux`(cut 3 [0 p.data] q.data)
       [filename data content-type]
     $(i +(i))
-  =/  file-size  (get-size p.-.+.result)
-  =/  sent  sent.state
-  =.  sent  ?:  =((lent sent) 10)
-    [[[filename now] ship file-size ~] (oust [9 1] sent)]
-  [[[filename now] ship file-size ~] sent.state]
-  =/  storage  storage.state
-  =.  used.storage  (add used.storage p.-.+.result)
+  =.  used.storage.state  (add used.storage.state p.-.+.result)
+  ?:  =(u.ship our)
+    =.  filename  (check-filename-duplicate filename state)
+    =/  received  received.state
+    =.  received  (~(put by received.state) filename [-.+.result content-type our now])
+    =/  =response-header:http
+      :-  301
+      :~  ['Location' '/file-share']
+      ==
+    :_  [received sent.state sending.state storage.state]
+    :~
+      [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
+      [%give %fact [/http-response/[p.req]]~ %http-response-data !>(~)]
+      [%give %kick [/http-response/[p.req]]~ ~]
+    ==
+  =.  sent.state  ?:  =((lent sent.state) 10)
+    [[[filename now] u.ship p.-.+.result ~] (oust [9 1] sent.state)]
+  [[[filename now] u.ship p.-.+.result ~] sent.state]
   =/  =response-header:http
     :-  301
     :~  ['Location' '/file-share']
     ==
-  :_  [received.state sent (~(put by sending.state) eny result) storage]
+  :_  [received.state sent.state (~(put by sending.state) eny result) storage.state]
   :~
     [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
     [%give %fact [/http-response/[p.req]]~ %http-response-data !>(~)]
     [%give %kick [/http-response/[p.req]]~ ~]
     ?:  =(body.request.q.req ~)
       !!
-    [%pass /send-url/[filename]/[(scot %da now)] %agent [ship %file-share] %poke %file-share-initiate !>([filename now eny p.-.+.result])]
+    [%pass /send-url/[filename]/[(scot %da now)]/[eny] %agent [u.ship %file-share] %poke %file-share-initiate !>([filename now eny p.-.+.result])]
   ==
 ::
 ++  set-capacity
@@ -197,14 +264,22 @@
 ++  delete-sent
   |=  [req=(pair @ta inbound-request:eyre) state=app-state filename=@t date=@da]
   ^-  (quip card app-state)
-  =/  compare  [filename date]
-  =/  i  0
-  =.  i  |-
-    ^-  @ud
-    =/  sent-file  (snag i sent.state)
-    ?:  =(compare -.sent-file)
-      i
-    $(i +(i))
+  =/  i  (get-sent-index filename date sent.state)
+  =/  sent-file  (snag i sent.state)
+  =.  used.storage.state  ?~  status.sent-file
+    (sub used.storage.state size.sent-file)
+  used.storage.state
+  ?:  =((lent sent.state) 1)
+    =/  =response-header:http
+      :-  301
+      :~  ['Location' '/file-share']
+      ==
+    :_  [received.state (oust [i 1] sent.state) sending.state storage.state]
+    :~
+      [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
+      [%give %fact [/http-response/[p.req]]~ %http-response-data !>(~)]
+      [%give %kick [/http-response/[p.req]]~ ~]
+    ==
   =/  =response-header:http
     :-  301
     :~  ['Location' '/file-share/more-sent']
@@ -273,21 +348,6 @@
   .menu-wrapper2 {
     width: 299px;
   }
-  #storage-table {
-    width: 100%;
-    padding-bottom: 16px;
-  }
-  #received-table {
-    width: 100%;
-    padding-bottom: 32px;
-  }
-  #sent-table {
-    width: 100%;
-  }
-  #empty-table {
-    width: 100%;
-    margin-bottom: 16px;
-  }
   form {
     display: flex;
     justify-content: center;
@@ -302,6 +362,12 @@
   }
   table {
     width: 100%;
+  }
+  .table-div {
+    padding-bottom: 16px;
+  }
+  .table-div-received {
+    padding-bottom: 32px;
   }
   table, th, td {
     border: 1px solid #d0d0d0;
@@ -358,7 +424,7 @@
     padding: 12px;
   }
   #file-input {
-    padding: 12px 0px 18px;
+    padding: 0px 0px 18px;
   }
   .input-row {
     display: flex;
@@ -366,7 +432,22 @@
     padding-bottom: 8px;
   }
   .input-row2 {
+    padding-bottom: 4px;
+  }
+  .input-row3 {
     padding-bottom: 16px;
+  }
+  .input-error {
+    font-size: 10px;
+    color: red;
+    padding-left: 4px;
+    padding-bottom: 4px;
+  }
+  .input-error-hidden {
+    visibility: hidden;
+  }
+  .input-error-visible {
+    visibility: visible;
   }
   #submit-button {
     padding: 12px;
@@ -411,7 +492,7 @@
     display: flex;
     flex-direction: column;
     align-items: end;
-    padding: 12px 16px 48px;
+    padding: 8px 12px 8px;
     font-weight: 300;
   }
   #more-sent-empty {
@@ -429,10 +510,23 @@
     padding-bottom: 18px;
     padding-left: 16px;
   }
+  #empty-row {
+    border-right-color: white;
+  }
+  @media only screen and (max-width: 800px) {
+    th, td {
+      padding: 7px 16px 7px 8px;
+    }
+  }
+  @media only screen and (max-width: 600px) {
+    th, td {
+      padding: 0px;
+    }
+  }
   '''
 ::
 ++  file-share-get
-  |=  [req=(pair @ta inbound-request:eyre) state=app-state our=@p]
+  |=  [req=(pair @ta inbound-request:eyre) state=app-state our=@p valid-ship=?]
   ^-  (quip card app-state)
   =/  body
     %-  as-octs:mimes:html
@@ -452,10 +546,13 @@
             ==
             ;div.menu-wrapper
               ;form(method "post", action "/file-share", enctype "multipart/form-data")
-                ;div.input-row
+                ;div.input-row.input-row2
                   ;label(for "ship"):"Ship"
-                  ;input(type "text", name "ship");
+                  ;input(type "text", name "ship", maxlength "14");
                 ==
+                ;+  ?:  ?=(%.y valid-ship)
+                      ;p.input-error.input-error-hidden: *
+                    ;p.input-error.input-error-invisible: *Invalid input
                 ;div.input-row
                   ;input#file-input(type "file", name "file");
                   ;button#submit-button:"Submit"
@@ -470,7 +567,7 @@
                   =/  dvr1  ?:  =(used.storage.state 0)
                     [p=0 q=0]
                   (dvr capacity.storage.state used.storage.state)
-                  ;div#storage-table
+                  ;div.table-div
                     ;table
                       ;tr
                         ;td#capacity-field
@@ -490,11 +587,24 @@
                     ==
                   ==
             ;+  ?:  =(sent.state ~)
-                  ;div#empty-table
-                    ;p: No files sent.
+                  ;div.table-div
+                    ;table
+                      ;tr
+                        ;th: LAST SENT
+                        ;th: To
+                        ;th: Date
+                        ;th: Size
+                        ;th: Status
+                      ==
+                      ;tr
+                        ;td#empty-row
+                          ;p: No files sent.
+                        ==
+                      ==
+                    ==
                   ==
                 =/  last  (snag 0 sent.state)
-                ;div#sent-table
+                ;div.table-div
                   ;table
                     ;tr
                       ;th: LAST SENT
@@ -515,7 +625,7 @@
                           ;p: {(trip (get-date date.last))}
                         ==
                         ;td
-                          ;p: {(trip size.last)}
+                          ;p: {(trip (get-size size.last))}
                         ==
                         ;+  ?~  status.last
                           ;td#status-field
@@ -534,6 +644,10 @@
                           ;td#status-field3
                             ;p: ERR=GET_REQUEST
                           ==
+                        ?:  =(`@da`3 u.status.last)
+                          ;td#status-field3
+                            ;p: ERR=POKE-FAILED
+                          ==
                         ;td#status-field2
                           ;p: {(trip (get-date u.status.last))}
                         ==
@@ -549,11 +663,23 @@
                       ==
                 ==
             ;+  ?:  =(received.state ~)
-                  ;div#empty-table
-                    ;p: No files received.
+                  ;div.table-div
+                    ;table
+                      ;tr
+                        ;th: RECEIVED FILES
+                        ;th: To
+                        ;th: Date
+                        ;th: Size
+                      ==
+                      ;tr
+                        ;td#empty-row
+                          ;p: No files received.
+                        ==
+                      ==
+                    ==
                   ==
                 =/  files-list  ~(tap by received.state)
-                ;div#received-table
+                ;div.table-div.table-div-received
                   ;table
                     ;tr
                       ;th: RECEIVED FILES
@@ -616,9 +742,6 @@
           ;style: {style}
         ==
         ;body
-          ::  ;div
-          ::    ;h5.header.header2: File-Share: Storage Manager
-          ::  ==
           ;div#tables
             ;div.back-button.back-button2
               ;a/"/file-share": << BACK
@@ -629,7 +752,7 @@
               ==
               ;div.menu-wrapper.menu-wrapper2
                 ;form(method "post", action "/file-share/capacity", enctype "application/x-www-form-urlencoded")
-                ;div.input-row.input-row2
+                ;div.input-row.input-row3
                     ;label(for "capacity"):"Set Storage Capacity ({(scow %ud used)}-100 MB):"
                     ;input(type "number", name "capacity", min "{(scow %ud used)}", max "100");
                   ==
@@ -676,8 +799,21 @@
               ;a/"/file-share": << BACK
             ==
             ;+  ?:  =(sent.state ~)
-                  ;div#empty-table
-                    ;p: No files sent.
+                  ;div#sent-table
+                    ;table
+                      ;tr
+                        ;th: LAST SENT
+                        ;th: To
+                        ;th: Date
+                        ;th: Size
+                        ;th: Status
+                      ==
+                      ;tr
+                        ;td#empty-row
+                          ;p: No files sent.
+                        ==
+                      ==
+                    ==
                   ==
                 ;div#latest-sent
                   ;table
@@ -690,7 +826,7 @@
                     ==
                     ;div
                       ;*  %+  turn  sent.state
-                      |=  [[filename=@t date=@da] receiver=@p size=@t status=(unit @da)]
+                      |=  [[filename=@t date=@da] receiver=@p size=@ud status=(unit @da)]
                         ;tr
                           ;td
                             ;p: {(trip filename)}
@@ -702,7 +838,7 @@
                             ;p: {(trip (get-date date))}
                           ==
                           ;td
-                            ;p: {(trip size)}
+                            ;p: {(trip (get-size size))}
                           ==
                           ;+  ?~  status
                             ;td#status-field4
@@ -721,12 +857,16 @@
                             ;td#status-field3
                               ;p: ERR=GET_REQUEST
                             ==
+                          ?:  =(`@da`3 u.status)
+                          ;td#status-field3
+                            ;p: ERR=POKE-FAILED
+                          ==
                           ;td#status-field2
                             ;p: {(trip (get-date u.status))}
                           ==
                           ;td.delete-button-wrapper
                           ;form(method "post", action "/file-share/{(en-urlt:html (trip filename))}/{(en-urlt:html (trip (scot %da date)))}/delete", enctype "multipart/form-data")
-                              ;button.delete-button: Delete
+                              ;button.delete-button: Remove
                             ==
                           ==
                         ==
@@ -761,7 +901,7 @@
     [%give %kick [/http-response/[p.req]]~ ~]
   ==
 ::
-++  get-file
+++  get-file-response
   |=  [req=(pair @ta inbound-request:eyre) state=app-state eny=@t]
   ^-  (quip card app-state)
   =/  file=[filename=@t body=octs content-type=@t]  (~(got by sending.state) eny)
@@ -804,7 +944,7 @@
   =/  ip  (scot %if `@if`p.lane)
   =/  ip-length  (lent (trip ip))
   =.  ip  (cut 3 [1 ip-length] ip)
-  =/  download-url  `@t`(cat 3 (cat 3 (cat 3 'https://' ip) '/file-share/') eny.file-info)
+  =/  download-url  `@t`(cat 3 (cat 3 (cat 3 'http://' ip) '/file-share/') eny.file-info)
   =/  =request:http  [%'GET' download-url ~ ~]
   [[%pass /get-file/[filename.file-info]/[(scot %da timestamp.file-info)]/[eny.file-info]/[(scot %p src)] %arvo %i %request request *outbound-config:iris] ~]
 --
@@ -845,7 +985,7 @@
       =/  purl  (rash url.request.q.req apat:de-purl:html)
       =/  eny  (snag 1 q.purl)
       ?:  (~(has by sending.state) eny)
-        (get-file req state eny)
+        (get-file-response req state eny)
       (http-login-redirect req state)
     ?.  authenticated.q.req
       (http-login-redirect req state)
@@ -876,14 +1016,24 @@
           =/  url-date  ?~  url-date-encoded
             !!
           `@da`(slav %da (crip u.url-date-encoded))
+          ::  =/  compare  [url-filename url-date]
+          ::  =/  i  0
+          ::  =.  i  |-
+          ::    ^-  @ud
+          ::    =/  sent-file  (snag i sent.state)
+          ::    ?:  =(compare -.sent-file)
+          ::      i
+          ::    $(i +(i))
           (delete-sent req state url-filename url-date)
-        `state
-      `state
+        !!
+      !!
     ::
         %'GET'
       ::  ~&  state
       ?:  =(url.request.q.req '/file-share')
-        (file-share-get req state our.bowl)
+        (file-share-get req state our.bowl %.y)
+      ?:  =(url.request.q.req '/file-share/invalid-input')
+        (file-share-get req state our.bowl %.n)
       ?:  =(url.request.q.req '/file-share/capacity')
         (get-storage-page req state)
       ?:  =(url.request.q.req '/file-share/more-sent')
@@ -912,40 +1062,25 @@
       [(request-file inbound-file our.bowl now.bowl src.bowl) this]
     :_  this
     :~
-        [%pass /failed %agent [src.bowl %file-share] %poke %file-share-failed !>([filename.inbound-file timestamp.inbound-file 'storage'])]
+      [%pass /failed %agent [src.bowl %file-share] %poke %file-share-failed !>([filename.inbound-file timestamp.inbound-file 'storage'])]
     ==
   ::
       %file-share-complete
     =/  file  !<  transfer-complete  vase
-    =/  compare  [filename.file timestamp-sent.file]
-    =/  i  0
-    =.  i  |-
-      ^-  @ud
-      =/  sent-file  (snag i sent.state)
-      ?:  =(compare -.sent-file)
-      i
-    $(i +(i))
+    =/  i  (get-sent-index filename.file timestamp-sent.file sent.state)
     =/  sent  sent.state
     =/  sent-file  (snag i sent)
     =.  status.sent-file  [~ timestamp-received.file]
     =.  sent  (oust [i 1] sent)
     =.  sent  (into sent i sent-file)
     =/  sending-file  (~(got by sending.state) eny.file)
-    ::  ?<  ?=(~ sending-file)
     =/  storage  storage.state
     =.  used.storage  (sub used.storage -.-.+.sending-file)
     `this(state [received.state sent (~(del by sending.state) eny.file) storage])
   ::
       %file-share-failed
     =/  error  !<  error-info  vase
-    =/  compare  [filename.error date.error]
-    =/  i  0
-    =.  i  |-
-      ^-  @ud
-      =/  sent-file  (snag i sent.state)
-      ?:  =(compare -.sent-file)
-      i
-    $(i +(i))
+    =/  i  (get-sent-index filename.error date.error sent.state)
     =/  sent  sent.state
     =/  sent-file  (snag i sent)
     =.  status.sent-file  ?:  =(message.error 'ip')
@@ -954,6 +1089,8 @@
       [~ `@da`1]
     ?:  =(message.error 'get-request')
       [~ `@da`2]
+    ?:  =(message.error 'poke')
+      [~ `@da`3]
     !!
     =.  sent  (oust [i 1] sent)
     =.  sent  (into sent i sent-file)
@@ -975,14 +1112,21 @@
   |=  [=wire =sign:agent:gall]
   ^-  (quip card _this)
   ?+   wire  (on-agent:default wire sign)
-      [%send-url *]
+      [%send-url @ @ @ ~]
     ?.  ?=(%poke-ack -.sign)
       (on-agent:default wire sign)
     ?~  p.sign
       %-  (slog '%pokeit: File-share successful!' ~)
       `this
     %-  (slog '%pokeit: File-share unsuccessful!' ~)
-    `this
+    =/  eny  `@t`i.t.t.t.wire
+    =/  sending-file  (~(got by sending.state) eny)
+    =.  used.storage.state  (sub used.storage.state p.body.sending-file)
+    =.  sending.state  (~(del by sending.state) eny)
+    :_  this
+    :~
+    [%pass /failed %agent [our.bowl %file-share] %poke %file-share-failed !>([`@t`i.t.wire `@da`(slav %da i.t.t.wire) 'poke'])]
+    ==
   ==
 ++  on-arvo
   |=  [=wire =sign-arvo]
@@ -1010,28 +1154,11 @@
       =/  filename  `@t`i.t.wire
       =/  content-type  type.full-file
       =/  body  data.full-file
-      =/  i  0
-      =/  filename-length  (lent (trip filename))
-      =/  filename-name  |-
-        ^-  @t
-        ?:  =((snag i (trip filename)) '.')
-          (cut 3 [0 i] filename)
-        $(i +(i))
-      =.  i  (lent (trip filename-name))
-      =/  filename-extension  (cut 3 [i filename-length] filename)
-      =.  i  0
-      =.  filename  |-
-        ^-  @t
-        ?.  (~(has by received.state) filename)
-          filename
-        =.  i  (add i 1)
-        =/  filename-number  (cat 3 '_' (scot %ud i))
-        $(filename (cat 3 filename-name (cat 3 filename-number filename-extension)))
+      =.  filename  (check-filename-duplicate filename state)
       ?<  ?=(~ i.t.t.wire)
       =/  eny  `@t`i.t.t.t.wire
       =/  storage  storage.state
       =.  used.storage  (add used.storage p.body)
-      =/  filename-hark  'test %283%29.rtf'
       :_  this(state [(~(put by received.state) filename [body content-type src.bowl now.bowl]) sent.state sending.state storage])
       :~
         [%pass /file-received %agent [`@p`(slav %p src) %file-share] %poke %file-share-complete !>([`@t`i.t.wire timestamp now.bowl eny])]
