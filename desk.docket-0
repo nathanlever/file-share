@@ -4,7 +4,7 @@
     image+'https://raw.githubusercontent.com/nathanlever/file-share/master/app-icon.svg'
     base+'file-share'
     version+[0 0 1]
-    site+/file-share
+    site+/apps/file-share
     website+'https://developers.urbit.org/guides/additional/software-distribution'
     license+'MIT'
 ==

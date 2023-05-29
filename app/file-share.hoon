@@ -2,6 +2,10 @@
 /+  default-agent, dbug
 =>
 |%
++$  versioned-state
+  $%  state-0
+  ==
++$  state-0  [%0 app-state]
 ++  get-date
   |=  date=@da
 ^-  @t
@@ -40,7 +44,7 @@
     $(i +(i))
 ::
 ++  check-filename-duplicate
-  |=  [filename=@t state=app-state]
+  |=  [filename=@t =received]
   ^-  @t
     =/  i  0
     =/  filename-length  (lent (trip filename))
@@ -54,20 +58,19 @@
     =.  i  0
     |-
       ^-  @t
-      ?.  (~(has by received.state) filename)
+      ?.  (~(has by received) filename)
         filename
       =.  i  (add i 1)
       =/  filename-number  (cat 3 '_' (scot %ud i))
       $(filename (cat 3 filename-name (cat 3 filename-number filename-extension)))
 ::
 ++  http-login-redirect
-  |=  [req=(pair @ta inbound-request:eyre) state=app-state]
-  ^-  (quip card app-state)
+  |=  req=(pair @ta inbound-request:eyre)
+  ^-  (list card)
     =/  =response-header:http
       :-  301
-      :~  ['Location' '/~/login?redirect=/file-share']
+      :~  ['Location' '/~/login?redirect=/apps/file-share']
       ==
-    :_  state
     :~
       [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
       [%give %fact [/http-response/[p.req]]~ %http-response-data !>(~)]
@@ -75,8 +78,8 @@
     ==
 ::
 ++  invalid-http-request-method
-  |=  [req=(pair @ta inbound-request:eyre) state=app-state]
-  ^-  (quip card app-state)
+  |=  req=(pair @ta inbound-request:eyre)
+  ^-  (list card)
     =/  data=octs
       (as-octs:mimes:html '<h1>405 Method Not Allowed</h1>')
     =/  content-length=@t
@@ -87,7 +90,6 @@
           ['Content-Type' 'text/html']
           ['Allow' 'GET']
       ==
-    :_  state
     :~
       [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
       [%give %fact [/http-response/[p.req]]~ %http-response-data !>(`data)]
@@ -95,13 +97,12 @@
     ==
 ::
 ++  invalid-ship-redirect
-  |=  [req=(pair @ta inbound-request:eyre) state=app-state ship=(unit @p)]
-  ^-  (quip card app-state)
+  |=  req=(pair @ta inbound-request:eyre)
+  ^-  (list card)
   =/  =response-header:http
     :-  301
-    :~  ['Location' '/file-share/invalid-input']
+    :~  ['Location' '/apps/file-share/invalid-input']
     ==
-  :_  state
   :~
     [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
     [%give %fact [/http-response/[p.req]]~ %http-response-data !>(~)]
@@ -139,12 +140,12 @@
       [~ `@p`u.ship-result]
     $(i +(i))
   ?~  ship
-    (invalid-ship-redirect req state ship)
+    [(invalid-ship-redirect req) state]
   ?.  ?|  ?=(%duke (clan:title u.ship))
           ?=(%king (clan:title u.ship))
           ?=(%czar (clan:title u.ship))
       ==
-    (invalid-ship-redirect req state ship)
+    [(invalid-ship-redirect req) state]
   =/  filename  |-
     ^-  @t
     =/  compare  `@ux`(cut 3 [i 10] q.data)
@@ -195,50 +196,43 @@
       [filename data content-type]
     $(i +(i))
   =.  used.storage.state  (add used.storage.state p.-.+.result)
-  ?:  =(u.ship our)
-    =.  filename  (check-filename-duplicate filename state)
-    =/  received  received.state
-    =.  received  (~(put by received.state) filename [-.+.result content-type our now])
-    =/  =response-header:http
-      :-  301
-      :~  ['Location' '/file-share']
-      ==
-    :_  [received sent.state sending.state storage.state]
-    :~
-      [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
-      [%give %fact [/http-response/[p.req]]~ %http-response-data !>(~)]
-      [%give %kick [/http-response/[p.req]]~ ~]
-    ==
+  =.  state  ?:  =(u.ship our)
+    =.  filename  (check-filename-duplicate filename received.state)
+    state(received (~(put by received.state) filename [-.+.result content-type our now]))
   =.  sent.state  ?:  =((lent sent.state) 10)
     [[[filename now] u.ship p.-.+.result ~] (oust [9 1] sent.state)]
   [[[filename now] u.ship p.-.+.result ~] sent.state]
+  state(sending (~(put by sending.state) eny result))
   =/  =response-header:http
     :-  301
-    :~  ['Location' '/file-share']
+    :~  ['Location' '/apps/file-share']
     ==
-  :_  [received.state sent.state (~(put by sending.state) eny result) storage.state]
-  :~
+  :_  state
+  =/  cards  :~
     [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
     [%give %fact [/http-response/[p.req]]~ %http-response-data !>(~)]
     [%give %kick [/http-response/[p.req]]~ ~]
+  ==
+  =/  poke-card  ?.  =(u.ship our)
     ?:  =(body.request.q.req ~)
       !!
-    [%pass /send-url/[filename]/[(scot %da now)]/[eny] %agent [u.ship %file-share] %poke %file-share-initiate !>([filename now eny p.-.+.result])]
-  ==
+    [%pass /send-url/[filename]/[(scot %da now)]/[eny] %agent [u.ship %file-share] %poke %file-share-initiate !>([filename now eny p.-.+.result])]~
+  ~
+  (weld `(list card)`cards `(list card)`poke-card)
 ::
 ++  set-capacity
-  |=  [req=(pair @ta inbound-request:eyre) state=app-state]
-  ^-  (quip card app-state)
+  |=  [req=(pair @ta inbound-request:eyre) used=@ud]
+  ^-  (quip card @ud)
   ?<  ?=(~ body.request.q.req)
   =/  new-capacity  `@ud`(slav %ud (crip (oust [0 9] (trip q.u.body.request.q.req))))
-  =.  storage.state  ?:  (gte (mul new-capacity 1.000.000) used.storage.state)
-    [(mul new-capacity 1.000.000) used.storage.state]
-  storage.state
+  =.  new-capacity  ?:  (gte (mul new-capacity 1.000.000) used)
+    (mul new-capacity 1.000.000)
+  !!
   =/  =response-header:http
     :-  301
-    :~  ['Location' '/file-share']
+    :~  ['Location' '/apps/file-share']
     ==
-  :_  [received.state sent.state sending.state storage.state]
+  :_  new-capacity
   :~
     [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
     [%give %fact [/http-response/[p.req]]~ %http-response-data !>(~)]
@@ -246,15 +240,15 @@
   ==
 ::
 ++  delete-file
-  |=  [req=(pair @ta inbound-request:eyre) state=app-state filename=@t]
-  ^-  (quip card app-state)
-  =/  file  (~(got by received.state) filename)
-  =.  used.storage.state  (sub used.storage.state p.body.file)
+  |=  [req=(pair @ta inbound-request:eyre) rcvd=received used=@ud filename=@t]
+  ^-  (quip card [received @ud])
+  =/  file  (~(got by rcvd) filename)
+  =.  used  (sub used p.body.file)
   =/  =response-header:http
     :-  301
-    :~  ['Location' '/file-share']
+    :~  ['Location' '/apps/file-share']
     ==
-  :_  [(~(del by received.state) filename) sent.state sending.state storage.state]
+  :_  [(~(del by rcvd) filename) used]
   :~
     [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
     [%give %fact [/http-response/[p.req]]~ %http-response-data !>(~)]
@@ -262,29 +256,21 @@
   ==
 ::
 ++  delete-sent
-  |=  [req=(pair @ta inbound-request:eyre) state=app-state filename=@t date=@da]
-  ^-  (quip card app-state)
-  =/  i  (get-sent-index filename date sent.state)
-  =/  sent-file  (snag i sent.state)
-  =.  used.storage.state  ?~  status.sent-file
-    (sub used.storage.state size.sent-file)
-  used.storage.state
-  ?:  =((lent sent.state) 1)
-    =/  =response-header:http
-      :-  301
-      :~  ['Location' '/file-share']
-      ==
-    :_  [received.state (oust [i 1] sent.state) sending.state storage.state]
-    :~
-      [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
-      [%give %fact [/http-response/[p.req]]~ %http-response-data !>(~)]
-      [%give %kick [/http-response/[p.req]]~ ~]
-    ==
+  |=  [req=(pair @ta inbound-request:eyre) snt=sent used=@ud filename=@t date=@da]
+  ^-  (quip card [sent @ud])
+  =/  i  (get-sent-index filename date snt)
+  =/  sent-file  (snag i snt)
+  =.  used  ?~  status.sent-file
+    (sub used size.sent-file)
+  used
+  =/  url-endpoint  ?:  =((lent snt) 1)
+    '/apps/file-share'
+  '/apps/file-share/more-sent'
   =/  =response-header:http
     :-  301
-    :~  ['Location' '/file-share/more-sent']
+    :~  ['Location' url-endpoint]
     ==
-  :_  [received.state (oust [i 1] sent.state) sending.state storage.state]
+  :_  [(oust [i 1] snt) used]
   :~
     [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
     [%give %fact [/http-response/[p.req]]~ %http-response-data !>(~)]
@@ -527,7 +513,7 @@
 ::
 ++  file-share-get
   |=  [req=(pair @ta inbound-request:eyre) state=app-state our=@p valid-ship=?]
-  ^-  (quip card app-state)
+  ^-  (list card)
   =/  body
     %-  as-octs:mimes:html
     %-  crip
@@ -545,7 +531,7 @@
               ;h5.header: File-Share
             ==
             ;div.menu-wrapper
-              ;form(method "post", action "/file-share", enctype "multipart/form-data")
+              ;form(method "post", action "/apps/file-share", enctype "multipart/form-data")
                 ;div.input-row.input-row2
                   ;label(for "ship"):"Ship"
                   ;input(type "text", name "ship", maxlength "14");
@@ -572,7 +558,7 @@
                       ;tr
                         ;td#capacity-field
                           Storage Capacity: {(trip (get-size capacity.storage.state))}
-                          ;a#storage-button/"/file-share/capacity": Manage
+                          ;a#storage-button/"/apps/file-share/capacity": Manage
                         ==
                         ;td: Used: {(trip (get-size used.storage.state))} / {used-percentage} %
                         ;+  ?:  =(p.dvr1 1)
@@ -630,7 +616,7 @@
                         ;+  ?~  status.last
                           ;td#status-field
                             ;p: Pending
-                            ;a#reload-button/"/file-share": R
+                            ;a#reload-button/"/apps/file-share": R
                           ==
                         ?:  =(`@da`0 u.status.last)
                           ;td#status-field3
@@ -656,7 +642,7 @@
                   ==
                   ;+  ?:  (gth (lent sent.state) 1)
                         ;div#more-sent
-                          ;a/"/file-share/more-sent": Show more...
+                          ;a/"/apps/file-share/more-sent": Show more...
                         ==
                       ;div#more-sent-empty
                         ;p: -
@@ -692,7 +678,7 @@
                       |=  [filename=@t [body=octs content-type=@t src=@p date=@da]]
                         ;tr
                           ;td
-                            ;a/"/file-share?grid-note=%2F{(en-urlt:html (trip filename))}": {(trip filename)}
+                            ;a/"/apps/file-share?grid-note=%2F{(en-urlt:html (trip filename))}": {(trip filename)}
                           ==
                           ;td
                             ;p: {(scow %p src)}
@@ -704,7 +690,7 @@
                             ;p: {(trip (get-size p.body))}
                           ==
                           ;td.delete-button-wrapper
-                            ;form(method "post", action "/file-share/{(en-urlt:html (trip filename))}/delete", enctype "multipart/form-data")
+                            ;form(method "post", action "/apps/file-share/{(en-urlt:html (trip filename))}/delete", enctype "multipart/form-data")
                               ;button.delete-button: Delete
                             ==
                           ==
@@ -719,7 +705,6 @@
     :-  200
     :~  ['content-type' 'text/html; charset=utf-8']
     ==
-  :_  state
   :~
     [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
     [%give %fact [/http-response/[p.req]]~ %http-response-data !>(`body)]
@@ -727,9 +712,9 @@
   ==
 ::
 ++  get-storage-page
-  |=  [req=(pair @ta inbound-request:eyre) state=app-state]
-  ^-  (quip card app-state)
-  =/  used  (add (div used.storage.state 1.000.000) 1)
+  |=  [req=(pair @ta inbound-request:eyre) =storage]
+  ^-  (list card)
+  =/  used  (add (div used.storage 1.000.000) 1)
   =/  body
     %-  as-octs:mimes:html
     %-  crip
@@ -744,15 +729,15 @@
         ;body
           ;div#tables
             ;div.back-button.back-button2
-              ;a/"/file-share": << BACK
+              ;a/"/apps/file-share": << BACK
             ==
             ;div#capacity-manager
               ;div.header-wrapper2
                 ;h5.header: File-Share Storage Manager
               ==
               ;div.menu-wrapper.menu-wrapper2
-                ;form(method "post", action "/file-share/capacity", enctype "application/x-www-form-urlencoded")
-                ;div.input-row.input-row3
+                ;form(method "post", action "/apps/file-share/capacity", enctype "application/x-www-form-urlencoded")
+                  ;div.input-row.input-row3
                     ;label(for "capacity"):"Set Storage Capacity ({(scow %ud used)}-100 MB):"
                     ;input(type "number", name "capacity", min "{(scow %ud used)}", max "100");
                   ==
@@ -769,7 +754,6 @@
     :-  200
     :~  ['content-type' 'text/html; charset=utf-8']
     ==
-  :_  state
   :~
     [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
     [%give %fact [/http-response/[p.req]]~ %http-response-data !>(`body)]
@@ -777,8 +761,8 @@
   ==
 ::
 ++  get-more-sent
-  |=  [req=(pair @ta inbound-request:eyre) state=app-state]
-  ^-  (quip card app-state)
+  |=  [req=(pair @ta inbound-request:eyre) =sent]
+  ^-  (list card)
   =/  body
     %-  as-octs:mimes:html
     %-  crip
@@ -796,9 +780,9 @@
           ==
           ;div#tables
             ;div.back-button
-              ;a/"/file-share": << BACK
+              ;a/"/apps/file-share": << BACK
             ==
-            ;+  ?:  =(sent.state ~)
+            ;+  ?:  =(sent ~)
                   ;div#sent-table
                     ;table
                       ;tr
@@ -825,7 +809,7 @@
                       ;th: Status
                     ==
                     ;div
-                      ;*  %+  turn  sent.state
+                      ;*  %+  turn  sent
                       |=  [[filename=@t date=@da] receiver=@p size=@ud status=(unit @da)]
                         ;tr
                           ;td
@@ -843,7 +827,7 @@
                           ;+  ?~  status
                             ;td#status-field4
                               ;p: Pending
-                              ;a#reload-button/"/file-share": R
+                              ;a#reload-button/"/apps/file-share": R
                             ==
                           ?:  =(`@da`0 u.status)
                             ;td#status-field3
@@ -865,9 +849,8 @@
                             ;p: {(trip (get-date u.status))}
                           ==
                           ;td.delete-button-wrapper
-                          ;form(method "post", action "/file-share/{(en-urlt:html (trip filename))}/{(en-urlt:html (trip (scot %da date)))}/delete", enctype "multipart/form-data")
-                              ;button.delete-button: Remove
-                            ==
+                          ;form(method "post", action "/apps/file-share/{(en-urlt:html (trip filename))}/{(en-urlt:html (trip (scot %da date)))}/delete", enctype "multipart/form-data")
+                            ;button.delete-button: Remove
                           ==
                         ==
                     ==
@@ -876,11 +859,11 @@
           ==
         ==
       ==
+    ==
   =/  =response-header:http
     :-  200
     :~  ['content-type' 'text/html; charset=utf-8']
     ==
-  :_  state
   :~
     [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
     [%give %fact [/http-response/[p.req]]~ %http-response-data !>(`body)]
@@ -888,13 +871,12 @@
   ==
 ::
 ++  page-not-found-response
-  |=  [req=(pair @ta inbound-request:eyre) state=app-state]
-  ^-  (quip card app-state)
+  |=  req=(pair @ta inbound-request:eyre)
+  ^-  (list card)
     =/  =response-header:http
     :-  404
     :~  ['Content-Type' 'text/html']
     ==
-  :_  state
   :~
     [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
     [%give %fact [/http-response/[p.req]]~ %http-response-data !>(~)]
@@ -902,33 +884,30 @@
   ==
 ::
 ++  get-file-response
-  |=  [req=(pair @ta inbound-request:eyre) state=app-state eny=@t]
-  ^-  (quip card app-state)
-  =/  file=[filename=@t body=octs content-type=@t]  (~(got by sending.state) eny)
+  |=  [req=(pair @ta inbound-request:eyre) =sending eny=@t]
+  ^-  (list card)
+  =/  file=[filename=@t body=octs content-type=@t]  (~(got by sending) eny)
   =/  =response-header:http
     :-  200
     :~  ['content-type' content-type.file]
     ==
-  :_  state
   :~
     [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
-    [%give %fact [/http-response/[p.req]]~ %http-response-data !>([~ body.file])]
+    [%give %fact [/http-response/[p.req]]~ %http-response-data !>(`body.file)]
     [%give %kick [/http-response/[p.req]]~ ~]
   ==
 ::
 ++  download-file
-  |=  [req=(pair @ta inbound-request:eyre) state=app-state filename=@t]
-  ^-  (quip card app-state)
-  =/  file  (~(get by received.state) filename)
+  |=  [req=(pair @ta inbound-request:eyre) file=[body=octs content-type=@t src=@p date=@da] filename=@t]
+  ^-  (list card)
   =/  =response-header:http
     :-  200
-    :~  ['content-type' content-type.+.+.file]
+    :~  ['content-type' content-type.file]
         ['content-disposition' (crip "attachment; filename=\"{(trip filename)}\"")]
     ==
-  :_  state
   :~
     [%give %fact [/http-response/[p.req]]~ %http-response-header !>(response-header)]
-    [%give %fact [/http-response/[p.req]]~ %http-response-data !>(`-.+.file)]
+    [%give %fact [/http-response/[p.req]]~ %http-response-data !>(`body.file)]
     [%give %kick [/http-response/[p.req]]~ ~]
   ==
 ::
@@ -944,7 +923,7 @@
   =/  ip  (scot %if `@if`p.lane)
   =/  ip-length  (lent (trip ip))
   =.  ip  (cut 3 [1 ip-length] ip)
-  =/  download-url  `@t`(cat 3 (cat 3 (cat 3 'http://' ip) '/file-share/') eny.file-info)
+  =/  download-url  `@t`(cat 3 (cat 3 (cat 3 'http://' ip) '/apps/file-share/') eny.file-info)
   =/  =request:http  [%'GET' download-url ~ ~]
   [[%pass /get-file/[filename.file-info]/[(scot %da timestamp.file-info)]/[eny.file-info]/[(scot %p src)] %arvo %i %request request *outbound-config:iris] ~]
 --
@@ -952,7 +931,7 @@
 ::  Main
 ::
 ^-  agent:gall
-=|  state=app-state
+=|  state=state-0
 %-  agent:dbug
 |_  =bowl:gall
 +*  this  .
@@ -960,14 +939,14 @@
 ::
 ++  on-init
   ^-  (quip card _this)
-  [[%pass /bind-url %arvo %e %connect `/'file-share' %file-share]~ this]
+  [[%pass /bind-url %arvo %e %connect `/apps/file-share %file-share]~ this]
 ++  on-save
   ^-  vase
   !>  state
 ++  on-load
   |=  v=vase
   ^-  (quip card _this)
-  =/  old  !<  app-state  v
+  =/  old  !<  state-0  v
   `this(state old)
 ++  on-poke
   |=  [=mark =vase]
@@ -977,84 +956,82 @@
   ::
       %handle-http-request
     =/  req  !<  (pair @ta inbound-request:eyre)  vase
-    =/  result
     =/  url-length  (lent (trip url.request.q.req))
     ?:  ?&  (gth url-length 150)
             ?=(%'GET' method.request.q.req)
         ==
       =/  purl  (rash url.request.q.req apat:de-purl:html)
-      =/  eny  (snag 1 q.purl)
+      =/  eny  (snag 2 q.purl)
       ?:  (~(has by sending.state) eny)
-        (get-file-response req state eny)
-      (http-login-redirect req state)
+        =/  response  (get-file-response req sending.state eny)
+        [response this]
+      [(http-login-redirect req) this]
     ?.  authenticated.q.req
-      (http-login-redirect req state)
-    ?+    method.request.q.req
-      (invalid-http-request-method req state)
+      [(http-login-redirect req) this]
+    ?+   method.request.q.req
+      [(invalid-http-request-method req) this]
     ::
         %'POST'
-      ?:  =(url.request.q.req '/file-share')
+      ?:  =(url.request.q.req '/apps/file-share')
         =/  eny  (crip (a-co:co eny.bowl))
-        (file-share-post req state our.bowl now.bowl eny)
-      ?:  =(url.request.q.req '/file-share/capacity')
-        (set-capacity req state)
+        =/  post-response  (file-share-post req +.state our.bowl now.bowl eny)
+        =.  state  [%0 +.post-response]
+        [-.post-response this]
+      ?:  =(url.request.q.req '/apps/file-share/capacity')
+        =/  set-capacity-response  (set-capacity req used.storage.state)
+        =.  capacity.storage.state  +.set-capacity-response
+        [-.set-capacity-response this]
       =/  purl  (rash url.request.q.req apat:de-purl:html)
       =/  purl-length  (lent q.purl)
       ?:  =((snag (sub purl-length 1) q.purl) 'delete')
-        =/  url-filename-encoded  (de-urlt:html (trip (snag 1 q.purl)))
-        =/  url-filename  ?~  url-filename-encoded
+        =/  url-filename-decoded  (de-urlt:html (trip (snag 2 q.purl)))
+        =/  url-filename  ?~  url-filename-decoded
           !!
-        (crip u.url-filename-encoded)
-        ?:  =((lent q.purl) 3)
-          ?:  ?&  (~(has by received.state) url-filename)
-                =(url.request.q.req (crip "/file-share/{(en-urlt:html (trip url-filename))}/delete"))
-              ==
-            (delete-file req state url-filename)
-          `state
+        (crip u.url-filename-decoded)
         ?:  =((lent q.purl) 4)
-          =/  url-date-encoded  (de-urlt:html (trip (snag 2 q.purl)))
-          =/  url-date  ?~  url-date-encoded
+          ?:  ?&  (~(has by received.state) url-filename)
+                =(url.request.q.req (crip "/apps/file-share/{(en-urlt:html (trip url-filename))}/delete"))
+              ==
+            =/  delete-file-response  (delete-file req received.state used.storage.state url-filename)
+            =.  received.state  -.+.delete-file-response
+            =.  used.storage.state  +.+.delete-file-response
+            [-.delete-file-response this]
+          !!
+        ?:  =((lent q.purl) 5)
+          =/  url-date-decoded  (de-urlt:html (trip (snag 3 q.purl)))
+          =/  url-date  ?~  url-date-decoded
             !!
-          `@da`(slav %da (crip u.url-date-encoded))
-          ::  =/  compare  [url-filename url-date]
-          ::  =/  i  0
-          ::  =.  i  |-
-          ::    ^-  @ud
-          ::    =/  sent-file  (snag i sent.state)
-          ::    ?:  =(compare -.sent-file)
-          ::      i
-          ::    $(i +(i))
-          (delete-sent req state url-filename url-date)
+          `@da`(slav %da (crip u.url-date-decoded))
+          =/  delete-sent-response  (delete-sent req sent.state used.storage.state url-filename url-date)
+          =.  sent.state  -.+.delete-sent-response
+          =.  used.storage.state  +.+.delete-sent-response
+          [-.delete-sent-response this]
         !!
       !!
     ::
         %'GET'
-      ::  ~&  state
-      ?:  =(url.request.q.req '/file-share')
-        (file-share-get req state our.bowl %.y)
-      ?:  =(url.request.q.req '/file-share/invalid-input')
-        (file-share-get req state our.bowl %.n)
-      ?:  =(url.request.q.req '/file-share/capacity')
-        (get-storage-page req state)
-      ?:  =(url.request.q.req '/file-share/more-sent')
-        (get-more-sent req state)
+      ?:  =(url.request.q.req '/apps/file-share')
+        [(file-share-get req +.state our.bowl %.y) this]
+      ?:  =(url.request.q.req '/apps/file-share/invalid-input')
+        [(file-share-get req +.state our.bowl %.n) this]
+      ?:  =(url.request.q.req '/apps/file-share/capacity')
+        [(get-storage-page req storage.state) this]
+      ?:  =(url.request.q.req '/apps/file-share/more-sent')
+        [(get-more-sent req sent.state) this]
       ?:  =(received.state ~)
-        (page-not-found-response req state)
+        [(page-not-found-response req) this]
       =/  url-length  (lent (trip url.request.q.req))
-      =/  url-filename-de-encoded  (de-urlt:html (trip (cut 3 [25 url-length] url.request.q.req)))
-      =/  url-filename  ?~  url-filename-de-encoded
+      =/  url-filename-encoded  (cut 3 [30 url-length] url.request.q.req)
+      =/  url-filename-decoded  (de-urlt:html (trip url-filename-encoded))
+      =/  url-filename  ?~  url-filename-decoded
         !!
-      (crip u.url-filename-de-encoded)
-      ::  ?:  ?&  =(url.request.q.req (cat 3 '/file-share?grid-note=%2F' (crip (en-urlt:html (trip url-filename)))))
-      ::  ?:  ?&  =(url.request.q.req (cat 3 '/file-share?grid-note=%2F' url-filename))
-      ::          (~(has by received.state) url-filename)
-      ::      ==
-      ?:  (~(has by received.state) url-filename)
-        (download-file req state url-filename)
-      (page-not-found-response req state)
+      (crip u.url-filename-decoded)
+      ?:  ?&  =(url.request.q.req (cat 3 '/apps/file-share?grid-note=%2F' url-filename-encoded))
+              (~(has by received.state) url-filename)
+          ==
+        [(download-file req (~(got by received.state) url-filename) url-filename) this]
+      [(page-not-found-response req) this]
     ==
-    =.  state  +.result
-    [-.result this]
   ::
       %file-share-initiate
     =/  inbound-file  !<  file-info  vase
@@ -1068,15 +1045,13 @@
       %file-share-complete
     =/  file  !<  transfer-complete  vase
     =/  i  (get-sent-index filename.file timestamp-sent.file sent.state)
-    =/  sent  sent.state
-    =/  sent-file  (snag i sent)
+    =/  sent-file  (snag i sent.state)
     =.  status.sent-file  [~ timestamp-received.file]
-    =.  sent  (oust [i 1] sent)
-    =.  sent  (into sent i sent-file)
+    =.  sent.state  (oust [i 1] sent.state)
+    =.  sent.state  (into sent.state i sent-file)
     =/  sending-file  (~(got by sending.state) eny.file)
-    =/  storage  storage.state
-    =.  used.storage  (sub used.storage -.-.+.sending-file)
-    `this(state [received.state sent (~(del by sending.state) eny.file) storage])
+    =.  used.storage.state  (sub used.storage.state -.-.+.sending-file)
+    `this(sending.state (~(del by sending.state) eny.file))
   ::
       %file-share-failed
     =/  error  !<  error-info  vase
@@ -1154,12 +1129,10 @@
       =/  filename  `@t`i.t.wire
       =/  content-type  type.full-file
       =/  body  data.full-file
-      =.  filename  (check-filename-duplicate filename state)
+      =.  filename  (check-filename-duplicate filename received.state)
       ?<  ?=(~ i.t.t.wire)
       =/  eny  `@t`i.t.t.t.wire
-      =/  storage  storage.state
-      =.  used.storage  (add used.storage p.body)
-      :_  this(state [(~(put by received.state) filename [body content-type src.bowl now.bowl]) sent.state sending.state storage])
+      :_  this(received.state (~(put by received.state) filename [body content-type src.bowl now.bowl]), used.storage.state (add used.storage.state p.body))
       :~
         [%pass /file-received %agent [`@p`(slav %p src) %file-share] %poke %file-share-complete !>([`@t`i.t.wire timestamp now.bowl eny])]
         :*  %pass
@@ -1172,7 +1145,7 @@
                   %.y
                   %.y
                   `@uvH`eny.bowl
-                  [~ ~ %file-share /file-share]
+                  [~ ~ %file-share /apps/file-share]
                   now.bowl
                   ['Received ' [%emph filename] ' from ' [%ship src.bowl] ~]
                   /[filename]
