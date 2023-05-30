@@ -200,8 +200,8 @@
     =.  filename  (check-filename-duplicate filename received.state)
     state(received (~(put by received.state) filename [-.+.result content-type our now]))
   =.  sent.state  ?:  =((lent sent.state) 10)
-    [[[filename now] u.ship p.-.+.result ~] (oust [9 1] sent.state)]
-  [[[filename now] u.ship p.-.+.result ~] sent.state]
+    [[[filename now] u.ship p.-.+.result ~ ~] (oust [9 1] sent.state)]
+  [[[filename now] u.ship p.-.+.result ~ ~] sent.state]
   state(sending (~(put by sending.state) eny result))
   =/  =response-header:http
     :-  301
@@ -260,9 +260,8 @@
   ^-  (quip card [sent @ud])
   =/  i  (get-sent-index filename date snt)
   =/  sent-file  (snag i snt)
-  =.  used  ?~  status.sent-file
+  =?  used  &(?=(~ status.sent-file) ?=(~ error.sent-file))
     (sub used size.sent-file)
-  used
   =/  url-endpoint  ?:  =((lent snt) 1)
     '/apps/file-share'
   '/apps/file-share/more-sent'
@@ -613,29 +612,32 @@
                         ;td
                           ;p: {(trip (get-size size.last))}
                         ==
-                        ;+  ?~  status.last
+                        ;+  ?.  ?=(~ status.last)
+                          ;td#status-field2
+                            ;p: {(trip (get-date u.status.last))}
+                          ==
+                        ?~  error.last
                           ;td#status-field
                             ;p: Pending
                             ;a#reload-button/"/apps/file-share": R
                           ==
-                        ?:  =(`@da`0 u.status.last)
-                          ;td#status-field3
-                            ;p: ERR=IP
-                          ==
-                        ?:  =(`@da`1 u.status.last)
-                          ;td#status-field3
-                            ;p: ERR=STORAGE
-                          ==
-                        ?:  =(`@da`2 u.status.last)
-                          ;td#status-field3
-                            ;p: ERR=GET_REQUEST
-                          ==
-                        ?:  =(`@da`3 u.status.last)
-                          ;td#status-field3
-                            ;p: ERR=POKE-FAILED
-                          ==
-                        ;td#status-field2
-                          ;p: {(trip (get-date u.status.last))}
+                        ?-  u.error.last
+                          %poke
+                            ;td#status-field3
+                              ;p: ERR=POKE-FAILED
+                            ==
+                          %storage
+                            ;td#status-field3
+                              ;p: ERR=STORAGE
+                            ==
+                          %get-request
+                            ;td#status-field3
+                              ;p: ERR=GET_REQUEST
+                            ==
+                          %ip
+                            ;td#status-field3
+                              ;p: ERR=IP
+                            ==
                         ==
                       ==
                     ==
@@ -810,7 +812,7 @@
                     ==
                     ;div
                       ;*  %+  turn  sent
-                      |=  [[filename=@t date=@da] receiver=@p size=@ud status=(unit @da)]
+                      |=  [[filename=@t date=@da] receiver=@p size=@ud status=(unit @da) error=(unit error-type)]
                         ;tr
                           ;td
                             ;p: {(trip filename)}
@@ -824,29 +826,32 @@
                           ;td
                             ;p: {(trip (get-size size))}
                           ==
-                          ;+  ?~  status
-                            ;td#status-field4
+                          ;+  ?.  ?=(~ status)
+                            ;td#status-field2
+                              ;p: {(trip (get-date u.status))}
+                            ==
+                          ?~  error
+                            ;td#status-field
                               ;p: Pending
                               ;a#reload-button/"/apps/file-share": R
                             ==
-                          ?:  =(`@da`0 u.status)
-                            ;td#status-field3
-                              ;p: ERR=IP
-                            ==
-                          ?:  =(`@da`1 u.status)
-                            ;td#status-field3
-                              ;p: ERR=STORAGE
-                            ==
-                          ?:  =(`@da`2 u.status)
-                            ;td#status-field3
-                              ;p: ERR=GET_REQUEST
-                            ==
-                          ?:  =(`@da`3 u.status)
-                          ;td#status-field3
-                            ;p: ERR=POKE-FAILED
-                          ==
-                          ;td#status-field2
-                            ;p: {(trip (get-date u.status))}
+                          ?-  u.error
+                            %poke
+                              ;td#status-field3
+                                ;p: ERR=POKE-FAILED
+                              ==
+                            %storage
+                              ;td#status-field3
+                                ;p: ERR=STORAGE
+                              ==
+                            %get-request
+                              ;td#status-field3
+                                ;p: ERR=GET_REQUEST
+                              ==
+                            %ip
+                              ;td#status-field3
+                                ;p: ERR=IP
+                              ==
                           ==
                           ;td.delete-button-wrapper
                           ;form(method "post", action "/apps/file-share/{(en-urlt:html (trip filename))}/{(en-urlt:html (trip (scot %da date)))}/delete", enctype "multipart/form-data")
@@ -919,7 +924,7 @@
   ?<  ?=(~ route.src-state)
   =/  lane  lane.u.route.src-state
   ?:  -.lane
-    [[%pass /failed %agent [src %file-share] %poke %file-share-failed !>([filename.file-info timestamp.file-info 'ip'])] ~]
+    [[%pass /failed %agent [src %file-share] %poke %file-share-failed !>([filename.file-info timestamp.file-info eny.file-info %ip])] ~]
   =/  ip  (scot %if `@if`p.lane)
   =/  ip-length  (lent (trip ip))
   =.  ip  (cut 3 [1 ip-length] ip)
@@ -1034,12 +1039,12 @@
     ==
   ::
       %file-share-initiate
-    =/  inbound-file  !<  file-info  vase
-    ?:  (gth (sub capacity.storage.state used.storage.state) size.inbound-file)
-      [(request-file inbound-file our.bowl now.bowl src.bowl) this]
+    =/  file-info  !<  file-info  vase
+    ?:  (gth (sub capacity.storage.state used.storage.state) size.file-info)
+      [(request-file file-info our.bowl now.bowl src.bowl) this]
     :_  this
     :~
-      [%pass /failed %agent [src.bowl %file-share] %poke %file-share-failed !>([filename.inbound-file timestamp.inbound-file 'storage'])]
+      [%pass /failed %agent [src.bowl %file-share] %poke %file-share-failed !>([filename.file-info timestamp.file-info eny.file-info %storage])]
     ==
   ::
       %file-share-complete
@@ -1056,20 +1061,14 @@
       %file-share-failed
     =/  error  !<  error-info  vase
     =/  i  (get-sent-index filename.error date.error sent.state)
-    =/  sent  sent.state
-    =/  sent-file  (snag i sent)
-    =.  status.sent-file  ?:  =(message.error 'ip')
-      [~ `@da`0]
-    ?:  =(message.error 'storage')
-      [~ `@da`1]
-    ?:  =(message.error 'get-request')
-      [~ `@da`2]
-    ?:  =(message.error 'poke')
-      [~ `@da`3]
-    !!
-    =.  sent  (oust [i 1] sent)
-    =.  sent  (into sent i sent-file)
-    `this(sent.state sent)
+    =/  sent-file  (snag i sent.state)
+    =.  error.sent-file  [~ error-type.error]
+    =.  sent.state  (oust [i 1] sent.state)
+    =.  sent.state  (into sent.state i sent-file)
+    =/  sending-file  (~(got by sending.state) eny.error)
+    =.  used.storage.state  (sub used.storage.state p.body.sending-file)
+    =.  sending.state  (~(del by sending.state) eny.error)
+    `this
   ==
 ::
 ++  on-watch
@@ -1094,13 +1093,9 @@
       %-  (slog '%pokeit: File-share successful!' ~)
       `this
     %-  (slog '%pokeit: File-share unsuccessful!' ~)
-    =/  eny  `@t`i.t.t.t.wire
-    =/  sending-file  (~(got by sending.state) eny)
-    =.  used.storage.state  (sub used.storage.state p.body.sending-file)
-    =.  sending.state  (~(del by sending.state) eny)
     :_  this
     :~
-    [%pass /failed %agent [our.bowl %file-share] %poke %file-share-failed !>([`@t`i.t.wire `@da`(slav %da i.t.t.wire) 'poke'])]
+    [%pass /failed %agent [our.bowl %file-share] %poke %file-share-failed !>([`@t`i.t.wire `@da`(slav %da i.t.t.wire) `@t`i.t.t.t.wire %poke])]
     ==
   ==
 ++  on-arvo
@@ -1118,10 +1113,11 @@
     ?>  ?=([%iris %http-response %finished *] sign-arvo)
       =/  src  `@t`i.t.t.t.t.wire
       =/  timestamp  `@da`(slav %da i.t.t.wire)
+      =/  eny  `@t`i.t.t.t.wire
       ?.  =(status-code.-.-.+.+.+.sign-arvo 200)
         :_  this
         :~
-          [%pass /failed %agent [`@p`(slav %p src) %file-share] %poke %file-share-failed !>([`@t`i.t.wire timestamp 'get-request'])]
+          [%pass /failed %agent [`@p`(slav %p src) %file-share] %poke %file-share-failed !>([`@t`i.t.wire timestamp eny %get-request])]
         ==
       ?:  ?=(~ full-file.client-response.sign-arvo)
         `this
@@ -1131,7 +1127,6 @@
       =/  body  data.full-file
       =.  filename  (check-filename-duplicate filename received.state)
       ?<  ?=(~ i.t.t.wire)
-      =/  eny  `@t`i.t.t.t.wire
       :_  this(received.state (~(put by received.state) filename [body content-type src.bowl now.bowl]), used.storage.state (add used.storage.state p.body))
       :~
         [%pass /file-received %agent [`@p`(slav %p src) %file-share] %poke %file-share-complete !>([`@t`i.t.wire timestamp now.bowl eny])]
