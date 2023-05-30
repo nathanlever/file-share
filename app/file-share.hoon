@@ -928,7 +928,7 @@
   =/  ip  (scot %if `@if`p.lane)
   =/  ip-length  (lent (trip ip))
   =.  ip  (cut 3 [1 ip-length] ip)
-  =/  download-url  `@t`(cat 3 (cat 3 (cat 3 'http://' ip) '/apps/file-share/') eny.file-info)
+  =/  download-url  `@t`(cat 3 (cat 3 (cat 3 'https://' ip) '/apps/file-share/') eny.file-info)
   =/  =request:http  [%'GET' download-url ~ ~]
   [[%pass /get-file/[filename.file-info]/[(scot %da timestamp.file-info)]/[eny.file-info]/[(scot %p src)] %arvo %i %request request *outbound-config:iris] ~]
 --
