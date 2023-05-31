@@ -276,6 +276,11 @@
     [%give %kick [/http-response/[p.req]]~ ~]
   ==
 ::
+++  favicon
+  ^-  tape
+  %-  trip
+  '<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 99.8 122.88"><defs><style>.cls-1{fill-rule:evenodd;}</style></defs><title>compare file</title><path class="cls-1" d="M67.47,118.48a4.4,4.4,0,0,1-4.38,4.4H4.4a4.38,4.38,0,0,1-3.11-1.29A4.35,4.35,0,0,1,0,118.48V41.69a4.4,4.4,0,0,1,4.4-4.4H29V25.55a2.57,2.57,0,0,1,1.87-2.48L53.55,1a2.52,2.52,0,0,1,2-.95H95.18A4.63,4.63,0,0,1,99.8,4.62V85.23a4.63,4.63,0,0,1-4.62,4.62H67.48v28.63ZM34.11,37.29h8.06a2.4,2.4,0,0,1,1.88.9L65.7,59.27a2.44,2.44,0,0,1,1.78,2.36V84.69H94.64V53.82H87.08v5.84c-.11,2.52-2,3.45-4.28,2.67a1.24,1.24,0,0,1-.36-.19C76.62,57.57,72.6,53,66.77,48.42l-.08-.07c-1.77-1.62-1.25-3.46.47-4.81L81.45,30.86a6.91,6.91,0,0,1,2.11-1.18,2.45,2.45,0,0,1,3.17,1.38,5.05,5.05,0,0,1,.35,2c0,1.81,0,3.64,0,5.45h7.56V5.13H58.12V26.05a2.59,2.59,0,0,1-2.59,2.59H34.11v8.65ZM53,9,37.53,23.48H53V9Zm-40.84,65H4.91V42.18H39.7V62.1a2.47,2.47,0,0,0,2.47,2.47h20.4q0,26.7,0,53.4H4.91V88.64h7.21V94.2c.1,2.4,1.88,3.28,4.07,2.54a1,1,0,0,0,.34-.18c5.55-4.36,9.38-8.71,14.93-13.07l.07-.07c1.7-1.53,1.19-3.29-.44-4.58L17.48,66.77a6.43,6.43,0,0,0-2-1.13,2.34,2.34,0,0,0-3,1.32,4.78,4.78,0,0,0-.32,1.9c0,1.73,0,3.47,0,5.19ZM44.61,45.89l14.7,13.77H44.61V45.89Z"/></svg>'
+::
 ++  style
   ^~
   %-  trip
@@ -498,6 +503,9 @@
   #empty-row {
     border-right-color: white;
   }
+  #storage-label {
+    margin-bottom: 16px;
+  }
   @media only screen and (max-width: 800px) {
     th, td {
       padding: 7px 16px 7px 8px;
@@ -520,6 +528,7 @@
       ;html
         ;head
           ;title:"File-Share"
+          ;link(rel "icon", type "image/x-icon", href "data:image/svg+xml,{favicon}");
           ;meta(charset "utf-8");
           ;meta(name "viewport", content "width=device-width, initial-scale=1");
           ;style: {style}
@@ -546,31 +555,31 @@
             ==
           ==
           ;div#tables
-            ;+  ?<  ?=(~ storage.state)
-                  =/  used-percentage  (oust [0 2] (scow %s (need (toi:rd (mul:rd (div:rd (sun:rd used.storage.state) (sun:rd capacity.storage.state)) (sun:rd 100))))))
-                  =/  available-storage  (get-size (sub capacity.storage.state used.storage.state))
-                  =/  dvr1  ?:  =(used.storage.state 0)
-                    [p=0 q=0]
-                  (dvr capacity.storage.state used.storage.state)
-                  ;div.table-div
-                    ;table
-                      ;tr
-                        ;td#capacity-field
-                          Storage Capacity: {(trip (get-size capacity.storage.state))}
-                          ;a#storage-button/"/apps/file-share/capacity": Manage
-                        ==
-                        ;td: Used: {(trip (get-size used.storage.state))} / {used-percentage} %
-                        ;+  ?:  =(p.dvr1 1)
-                              =/  dvr2  (dvr capacity.storage.state q.dvr1)
-                              ?:  (gte p.dvr2 4)
-                                ?:  (gte p.dvr2 10)
-                                  ;td#available-red: Available: {(trip available-storage)}
-                                ;td#available-yellow: Available: {(trip available-storage)}
-                              ;td#available-green: Available: {(trip available-storage)}
-                            ;td#available-green: Available: {(trip available-storage)}
-                      ==
+            ;+
+              =/  used-percentage  (oust [0 2] (scow %s (need (toi:rd (mul:rd (div:rd (sun:rd used.storage.state) (sun:rd capacity.storage.state)) (sun:rd 100))))))
+              =/  available-storage  (get-size (sub capacity.storage.state used.storage.state))
+              =/  dvr1  ?:  =(used.storage.state 0)
+                [p=0 q=0]
+              (dvr capacity.storage.state used.storage.state)
+              ;div.table-div
+                ;table
+                  ;tr
+                    ;td#capacity-field
+                      Storage Capacity: {(trip (get-size capacity.storage.state))}
+                      ;a#storage-button/"/apps/file-share/capacity": Manage
                     ==
+                    ;td: Used: {(trip (get-size used.storage.state))} / {used-percentage} %
+                    ;+  ?:  =(p.dvr1 1)
+                          =/  dvr2  (dvr capacity.storage.state q.dvr1)
+                          ?:  (gte p.dvr2 4)
+                            ?:  (gte p.dvr2 10)
+                              ;td#available-red: Available: {(trip available-storage)}
+                            ;td#available-yellow: Available: {(trip available-storage)}
+                          ;td#available-green: Available: {(trip available-storage)}
+                        ;td#available-green: Available: {(trip available-storage)}
                   ==
+                ==
+              ==
             ;+  ?:  =(sent.state ~)
                   ;div.table-div
                     ;table
@@ -642,7 +651,7 @@
                       ==
                     ==
                   ==
-                  ;+  ?:  (gth (lent sent.state) 1)
+                  ;+  ?:  (gth (lent sent.state) 0)
                         ;div#more-sent
                           ;a/"/apps/file-share/more-sent": Show more...
                         ==
@@ -724,6 +733,7 @@
       ;html
         ;head
           ;title:"File-Share"
+          ;link(rel "icon", type "image/x-icon", href "data:image/svg+xml,{favicon}");
           ;meta(charset "utf-8");
           ;meta(name "viewport", content "width=device-width, initial-scale=1");
           ;style: {style}
@@ -740,7 +750,8 @@
               ;div.menu-wrapper.menu-wrapper2
                 ;form(method "post", action "/apps/file-share/capacity", enctype "application/x-www-form-urlencoded")
                   ;div.input-row.input-row3
-                    ;label(for "capacity"):"Set Storage Capacity ({(scow %ud used)}-100 MB):"
+                    ;label(for "capacity"):"Current Storage Capacity: {(trip (get-size capacity.storage))}"
+                    ;label#storage-label(for "capacity"):"Set New Capacity ({(scow %ud used)}-100 MB):"
                     ;input(type "number", name "capacity", min "{(scow %ud used)}", max "100");
                   ==
                   ;div.input-row
@@ -772,6 +783,7 @@
       ;html
         ;head
           ;title:"File-Share"
+          ;link(rel "icon", type "image/x-icon", href "data:image/svg+xml,{favicon}");
           ;meta(charset "utf-8");
           ;meta(name "viewport", content "width=device-width, initial-scale=1");
           ;style: {style}
