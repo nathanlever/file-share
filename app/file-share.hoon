@@ -141,7 +141,8 @@
     $(i +(i))
   ?~  ship
     [(invalid-ship-redirect req) state]
-  ?.  ?|  ?=(%duke (clan:title u.ship))
+  ?.  ?|  ?=(%earl (clan:title u.ship))
+          ?=(%duke (clan:title u.ship))
           ?=(%king (clan:title u.ship))
           ?=(%czar (clan:title u.ship))
       ==
